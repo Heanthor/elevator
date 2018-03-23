@@ -29,18 +29,18 @@ import random
 import math
 
 
-# todo probably a library func for this
 def closest(ints, target):
     min_distance = 9999
     min_ele = None
 
     for i in ints:
         distance = math.fabs(target - i)
-        if distance < min_distance:
+        if distance < min_distance and i != target:
             min_distance = distance
             min_ele = i
 
     return min_ele
+
 
 def elements_above(ints, target):
     return [x for x in ints if x > target]
@@ -48,6 +48,7 @@ def elements_above(ints, target):
 
 def elements_below(ints, target):
     return [x for x in ints if x < target]
+
 
 class Floor:
     # running counter of all floor IDs
@@ -74,7 +75,8 @@ class Floor:
         self.current_passengers.remove(passenger)
 
     def __str__(self):
-        return "Floor %d [Current passengers: [%s]]" % (self.id, ", ".join([str(x.id) for x in self.current_passengers]))
+        return "Floor %d [Current passengers: [%s]]" % (
+            self.id, ", ".join([str(x.id) for x in self.current_passengers]))
 
     def __hash__(self):
         return self.id
@@ -112,17 +114,17 @@ class Elevator:
     def __init__(self, capacity):
         self.id = Elevator.get_new_id()
         self.capacity = capacity
-        self.current_floor = 1
+        self.current_floor = 0
         self.current_passengers = []
         self.direction = Elevator.STATIONARY
         # elevator keeps this state to know where to stop along the way
-        self.pending_stops = set()
+        self.pending_stops = []
 
     def has_room(self):
         return len(self.current_passengers) < self.capacity
 
     def board(self, passenger):
-        if len(self.current_passengers) + 1 >= self.capacity:
+        if len(self.current_passengers) + 1 > self.capacity:
             raise Exception("Elevator %d attempted to load over capacity!" % self.id)
 
         self.current_passengers.append(passenger)
@@ -134,11 +136,14 @@ class Elevator:
         self.current_passengers.remove(passenger)
 
     def add_stop(self, stop):
-        self.pending_stops.append(stop)
+        if stop not in self.pending_stops:
+            self.pending_stops.append(stop)
+            self.pending_stops = sorted(self.pending_stops)
 
     def __str__(self):
-        return "Elevator %d [Current floor %d, direction %s]" % (
-            self.id, self.current_floor, Elevator.get_direction_string(self.direction))
+        return "Elevator %d [Current floor %d, direction %s, pending stops [%s]]" % (
+            self.id, self.current_floor, Elevator.get_direction_string(self.direction),
+            ", ".join([str(x) for x in self.pending_stops]))
 
     def __hash__(self):
         return self.id
@@ -232,17 +237,13 @@ class Simulation:
     def sim_loop(self):
         while len(self.passengers) > 0:
             print("Sim step %d" % self.sim_step)
-            floor_requests = {}
+            floor_requests = []
 
             for floor in self.floors:
-                # first collect requests for the floor
-                requests = set()
-
-                for passenger in floor.current_passengers:
-                    # if a passenger is idle on a floor, they are requesting to be picked up
-                    requests.add(passenger)
-
-                floor_requests[floor.id] = requests
+                if len(floor.current_passengers):
+                    # if at least one passenger is idle on a floor, they are requesting an elevator goes there
+                    print("Elevator requested on floor %d" % floor.id)
+                    floor_requests.append(floor.id)
 
                 # board into any elevators that are stopped at this floor
                 # only board passengers who wish to go the direction of the elevator
@@ -256,13 +257,14 @@ class Simulation:
                             elif passenger.destination < floor.id:
                                 desired_direction = Elevator.DOWN
                             else:
-                                # this passenger is done, let's remove them
-                                print("Passenger %d is departing (on floor %d, destination %d)" % (
-                                    passenger.id, elevator.current_floor, passenger.destination
-                                ))
-                                elevator.depart(passenger.id)
-                                self.passengers.remove(passenger)
-                                continue
+                                raise Exception("Passenger should not be on the floor they wish to exit on!")
+                                # # this passenger is done, let's remove them
+                                # print("Passenger %d is departing (on floor %d, destination %d)" % (
+                                #     passenger.id, elevator.current_floor, passenger.destination
+                                # ))
+                                # elevator.depart(passenger.id)
+                                # self.passengers.remove(passenger)
+                                # continue
 
                             if elevator.has_room() \
                                     and (elevator.direction == desired_direction
@@ -283,48 +285,85 @@ class Simulation:
             # current location
             # internal passenger destinations
             # open requests
-            # pending stops -- an elevator will only have pending stops when it is nonempty
+            # pending stops
             for elevator in self.elevators:
+                # if any passenger is on their desired floor, they depart
+                for passenger in elevator.current_passengers:
+                    if elevator.current_floor == passenger.destination:
+                        print("Passenger %d is departing (on floor %d, destination %d)" % (
+                            passenger.id, elevator.current_floor, passenger.destination
+                        ))
+                        elevator.depart(passenger)
+                        self.passengers.remove(passenger)
+
+                        if len(self.passengers) == 0:
+                            self.sim_end()
+                            return
+
                 if len(elevator.pending_stops) == 0:
                     # reset direction as we can now choose which way to go again
                     elevator.direction = Elevator.STATIONARY
 
-                if len(elevator.pending_stops) and len(elevator.current_passengers) == 0:
-                    raise Exception("Assumption that elevator has pending stops only when nonempty is violated!")
-
-                    # # closest open request is the direction we take
-                    # TODO i don't feel this is needed, we can just scoop up requests for a direction
-                    # elevator.current_floor = closest(floor_requests.keys(), elevator.current_floor)
-
-                # need to associate pending requests with passengers in this current elevator
+                # remove stops from this list that the elevator shouldn't go to
+                # e.g. if the elevator is heading towards floor 1 for a request, it should not pick up on floor 2
+                # before handling that person's request
                 if elevator.direction == Elevator.STATIONARY:
-                    # pick the first request to take direction, pick all stops along that way
-                    closest_stop = closest(floor_requests.keys(), elevator.current_floor)
+                    if len(elevator.current_passengers):
+                        # take the first person's destination, that is the new direction
+                        stop = elevator.current_passengers[0].destination
+                    else:
+                        # pick the first request to take direction, pick all stops along that way
+                        stop = closest(floor_requests, elevator.current_floor)
 
-                    if closest_stop > elevator.current_floor:
+                    if stop is None:
+                        self.sim_end()
+                        return
+
+                    print("Elevator on floor %d is stationary, picking stop %d" % (elevator.current_floor, stop))
+                    if stop > elevator.current_floor:
                         elevator.direction = Elevator.UP
+                        floor_requests = [x for x in floor_requests if x <= stop]
                     else:
                         elevator.direction = Elevator.DOWN
+                        floor_requests = [x for x in floor_requests if x >= stop]
+                    print("New direction %s" % elevator.get_direction_string(elevator.direction))
+
                 # at this point, the elevator should have a direction
                 if elevator.direction == Elevator.UP:
                     # look ahead to pick up any requests on the way to our destination
-                    requested_floors = [x for x in floor_requests.keys() if x > elevator.current_floor]
+                    requested_floors = [x for x in floor_requests if x > elevator.current_floor] + [
+                        x for x in [y.destination for y in elevator.current_passengers] if x > elevator.current_floor]
 
                 elif elevator.direction == Elevator.DOWN:
                     # do the same, looking down instead
-                    requested_floors = [x for x in floor_requests.keys() if x < elevator.current_floor]
+                    requested_floors = [x for x in floor_requests if x < elevator.current_floor] + [
+                        x for x in [y.destination for y in elevator.current_passengers] if x < elevator.current_floor]
 
                 else:
                     raise Exception("Elevator does not have a direction after checking requests!")
 
                 if len(requested_floors) > 0:
                     sorted_floors = sorted(requested_floors)
-                    [elevator.pending_stops.add(x) for x in sorted_floors]
+                    [elevator.add_stop(x) for x in sorted_floors]
 
+                # move every elevator to their first pending stop
+                if len(elevator.pending_stops) > 0:
+                    elevator.current_floor = elevator.pending_stops.pop(0)
+                    print("Elevator %d moved to floor %d" % (elevator.id, elevator.current_floor))
+
+                    # if now the elevator has reached its final stop, we're stationary again
+                    if not len(elevator.pending_stops):
+                        elevator.direction = Elevator.STATIONARY
+
+            print("***********************************")
+            print(self)
             self.sim_step += 1
 
+    def sim_end(self):
+        print("Simulation finished after %d steps" % self.sim_step)
 
 if __name__ == '__main__':
-    s = Simulation(5, 1, 5, 3)
-    print(s)
-    s.sim_loop()
+    for i in range(0, 1000):
+        s = Simulation(5, 1, 5, 3)
+        s.sim_loop()
+        print("Finished sim run %d" % i)
