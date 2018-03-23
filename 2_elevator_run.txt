@@ -1,0 +1,113 @@
+C:\Users\reedt\AppData\Local\Programs\Python\Python36\python.exe C:/Users/reedt/PycharmProjects/elevator/elevator.py
+[Simulation] Passengers: 5, Floors: 3, Elevators: 2
+Passengers: [
+	Passenger 0 [Start 2, destination 0]
+	Passenger 1 [Start 0, destination 2]
+	Passenger 2 [Start 0, destination 1]
+	Passenger 3 [Start 0, destination 2]
+	Passenger 4 [Start 0, destination 2]
+]
+Elevators: [
+	Elevator 0 [Current floor 0, direction stationary, pending stops []]
+	Elevator 1 [Current floor 0, direction stationary, pending stops []]
+]
+Floors: [
+	Floor 0 [Current passengers: [1, 2, 3, 4]]
+	Floor 1 [Current passengers: []]
+	Floor 2 [Current passengers: [0]]
+]
+
+Sim step 0
+Elevator requested on floor 0
+Boarding passenger 1 in elevator 0 (on floor 0, desired destination 2, elevator direction stationary)
+Boarding passenger 3 in elevator 0 (on floor 0, desired destination 2, elevator direction stationary)
+Boarding passenger 2 in elevator 1 (on floor 0, desired destination 1, elevator direction stationary)
+Elevator requested on floor 2
+Elevator on floor 0 is stationary, picking stop 2
+New direction up
+Elevator 0 moved to floor 2
+Elevator on floor 0 is stationary, picking stop 1
+New direction up
+Elevator 1 moved to floor 1
+***********************************
+[Simulation] Passengers: 5, Floors: 3, Elevators: 2
+Passengers: [
+	Passenger 0 [Start 2, destination 0]
+	Passenger 1 [Start 0, destination 2]
+	Passenger 2 [Start 0, destination 1]
+	Passenger 3 [Start 0, destination 2]
+	Passenger 4 [Start 0, destination 2]
+]
+Elevators: [
+	Elevator 0 [Current floor 2, direction stationary, pending stops []]
+	Elevator 1 [Current floor 1, direction stationary, pending stops []]
+]
+Floors: [
+	Floor 0 [Current passengers: [4]]
+	Floor 1 [Current passengers: []]
+	Floor 2 [Current passengers: [0]]
+]
+
+Sim step 1
+Elevator requested on floor 0
+Elevator requested on floor 2
+Boarding passenger 0 in elevator 0 (on floor 2, desired destination 0, elevator direction stationary)
+@@@ Passenger 1 is departing (on floor 2, destination 2)
+Elevator on floor 2 is stationary, picking stop 2
+New direction down
+Elevator 0 moved to floor 0
+@@@ Passenger 2 is departing (on floor 1, destination 1)
+Elevator on floor 1 is stationary, picking stop 2
+New direction up
+Elevator 1 moved to floor 2
+***********************************
+[Simulation] Passengers: 3, Floors: 3, Elevators: 2
+Passengers: [
+	Passenger 0 [Start 2, destination 0]
+	Passenger 3 [Start 0, destination 2]
+	Passenger 4 [Start 0, destination 2]
+]
+Elevators: [
+	Elevator 0 [Current floor 0, direction stationary, pending stops []]
+	Elevator 1 [Current floor 2, direction stationary, pending stops []]
+]
+Floors: [
+	Floor 0 [Current passengers: [4]]
+	Floor 1 [Current passengers: []]
+	Floor 2 [Current passengers: []]
+]
+
+Sim step 2
+Elevator requested on floor 0
+Boarding passenger 4 in elevator 0 (on floor 0, desired destination 2, elevator direction stationary)
+@@@ Passenger 0 is departing (on floor 0, destination 0)
+Elevator on floor 0 is stationary, picking stop 2
+New direction up
+Elevator 0 moved to floor 2
+Elevator on floor 2 is stationary, picking stop 0
+New direction down
+Elevator 1 moved to floor 0
+***********************************
+[Simulation] Passengers: 2, Floors: 3, Elevators: 2
+Passengers: [
+	Passenger 3 [Start 0, destination 2]
+	Passenger 4 [Start 0, destination 2]
+]
+Elevators: [
+	Elevator 0 [Current floor 2, direction stationary, pending stops []]
+	Elevator 1 [Current floor 0, direction stationary, pending stops []]
+]
+Floors: [
+	Floor 0 [Current passengers: []]
+	Floor 1 [Current passengers: []]
+	Floor 2 [Current passengers: []]
+]
+
+Sim step 3
+@@@ Passenger 3 is departing (on floor 2, destination 2)
+Elevator on floor 2 is stationary, picking stop 2
+New direction down
+Simulation finished after 3 steps
+Finished sim run 0
+
+Process finished with exit code 0

@@ -186,6 +186,8 @@ class Simulation:
         self.floors = [Floor() for _ in range(num_floors)]
         self.elevators = [Elevator(self.elevator_capacity) for _ in range(num_elevators)]
         self.passengers = []
+        # list of all stops pending on all elevators, to avoid duplicating destinations
+        self.global_pending_stops = []
 
         for i in range(num_passengers):
             temp = [x.id for x in self.floors[:]]
@@ -266,9 +268,9 @@ class Simulation:
                                 # self.passengers.remove(passenger)
                                 # continue
 
-                            if elevator.has_room() \
-                                    and (elevator.direction == desired_direction
-                                         or elevator.direction == Elevator.STATIONARY):
+                            if elevator.has_room() and (
+                                    elevator.direction == desired_direction or
+                                    elevator.direction == Elevator.STATIONARY):
 
                                 print("Boarding passenger %d in elevator %d (on floor %d,"
                                       " desired destination %d, elevator direction %s)" %
@@ -276,7 +278,9 @@ class Simulation:
                                        Elevator.get_direction_string(elevator.direction)))
 
                                 elevator.board(passenger)
-                                elevator.add_stop(passenger.destination)
+                                if passenger.destination not in self.global_pending_stops:
+                                    elevator.add_stop(passenger.destination)
+                                    self.global_pending_stops.append(passenger.destination)
                                 # make sure the passenger is not in two places at once
                                 floor.exit(passenger)
 
@@ -290,7 +294,7 @@ class Simulation:
                 # if any passenger is on their desired floor, they depart
                 for passenger in elevator.current_passengers:
                     if elevator.current_floor == passenger.destination:
-                        print("Passenger %d is departing (on floor %d, destination %d)" % (
+                        print("@@@ Passenger %d is departing (on floor %d, destination %d)" % (
                             passenger.id, elevator.current_floor, passenger.destination
                         ))
                         elevator.depart(passenger)
@@ -319,7 +323,8 @@ class Simulation:
                         self.sim_end()
                         return
 
-                    print("Elevator on floor %d is stationary, picking stop %d" % (elevator.current_floor, stop))
+                    print("Elevator %d  floor %d is stationary, picking stop %d" % (
+                        elevator.id, elevator.current_floor, stop))
                     if stop > elevator.current_floor:
                         elevator.direction = Elevator.UP
                         floor_requests = [x for x in floor_requests if x <= stop]
@@ -344,11 +349,13 @@ class Simulation:
 
                 if len(requested_floors) > 0:
                     sorted_floors = sorted(requested_floors)
-                    [elevator.add_stop(x) for x in sorted_floors]
+                    [elevator.add_stop(x) for x in sorted_floors if x not in self.global_pending_stops]
+                    [self.global_pending_stops.append(x) for x in sorted_floors if x not in self.global_pending_stops]
 
                 # move every elevator to their first pending stop
                 if len(elevator.pending_stops) > 0:
                     elevator.current_floor = elevator.pending_stops.pop(0)
+                    self.global_pending_stops.remove(elevator.current_floor)
                     print("Elevator %d moved to floor %d" % (elevator.id, elevator.current_floor))
 
                     # if now the elevator has reached its final stop, we're stationary again
@@ -362,8 +369,13 @@ class Simulation:
     def sim_end(self):
         print("Simulation finished after %d steps" % self.sim_step)
 
+# TODO multi elevator bugs:
+# runs finish too early sometimes (see txt file)
+# passengers on same floor are getting split between elevators for some reason, when they could fit in 1
+
 if __name__ == '__main__':
-    for i in range(0, 1000):
-        s = Simulation(5, 1, 5, 3)
+    for i in range(0, 1):
+        s = Simulation(5, 2, 5, 3)
+        print(s)
         s.sim_loop()
         print("Finished sim run %d" % i)
