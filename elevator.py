@@ -51,18 +51,8 @@ def elements_below(ints, target):
 
 
 class Floor:
-    # running counter of all floor IDs
-    curr_id = 0
-
-    @classmethod
-    def get_new_id(cls):
-        i = cls.curr_id
-        cls.curr_id += 1
-
-        return i
-
-    def __init__(self):
-        self.id = Floor.get_new_id()
+    def __init__(self, floornumber):
+        self.id = floornumber
         self.current_passengers = []
 
     def enter(self, passenger):
@@ -172,30 +162,47 @@ class Passenger:
         return self.id
 
 
-class Simulation:
-    # actions
-    ENTER = 1
-    EXIT = 2
-    WAIT = 3
+class SimEvent:
+    class SimEvents:
+        BOARD = 1
+        DEPART = 2
+        ELE_MOVE = 3
 
-    def __init__(self, elevator_capacity, num_elevators, num_passengers, num_floors):
+        @classmethod
+        def to_str(cls, event):
+            if event == cls.BOARD:
+                return "board"
+            elif event == cls.DEPART:
+                return "depart"
+            elif event == cls.ELE_MOVE:
+                return "move"
+            else:
+                return "unknown"
+
+    def __init__(self, event, data):
+        self.event = event
+        self.data = data
+
+    def __eq__(self, other):
+        return self.data == other.data and self.event == other.event
+
+    def __str__(self):
+        return "%s - %s" % (SimEvent.SimEvents.to_str(self.event), self.data)
+
+
+class Simulation:
+    def __init__(self, elevator_capacity, num_elevators, num_floors, passengers):
         self.sim_step = 0
 
         self.elevator_capacity = elevator_capacity
 
-        self.floors = [Floor() for _ in range(num_floors)]
+        self.floors = [Floor(x) for x in range(num_floors)]
         self.elevators = [Elevator(self.elevator_capacity) for _ in range(num_elevators)]
-        self.passengers = []
+        self.passengers = passengers[:]
         # list of all stops pending on all elevators, to avoid duplicating destinations
         self.global_pending_stops = []
-
-        for i in range(num_passengers):
-            temp = [x.id for x in self.floors[:]]
-
-            start_floor = temp.pop(random.randint(0, len(temp) - 1))
-            end_floor = temp.pop(random.randint(0, len(temp) - 1))
-
-            self.passengers.append(Passenger(start_floor, end_floor))
+        # list of events triggered by sim, useful record for testing
+        self.sim_events = []
 
         # load floors with initial passengers
         for passenger in self.passengers:
@@ -211,6 +218,24 @@ class Simulation:
                     passenger.destination, passenger.id))
 
             start_floor.enter(passenger)
+
+    @classmethod
+    def manual_setup(cls, elevator_capacity, num_elevators, num_floors, passengers):
+        return cls(elevator_capacity, num_elevators, num_floors, passengers)
+
+    @classmethod
+    def random_setup(cls, elevator_capacity, num_elevators, num_passengers, num_floors):
+        passengers = []
+
+        for i in range(num_passengers):
+            temp = [x for x in range(num_floors)]
+
+            start_floor = temp.pop(random.randint(0, len(temp) - 1))
+            end_floor = temp.pop(random.randint(0, len(temp) - 1))
+
+            passengers.append(Passenger(start_floor, end_floor))
+
+        return cls(elevator_capacity, num_elevators, num_floors, passengers)
 
     def __str__(self):
         to_return = "[Simulation] Passengers: %d, Floors: %d, Elevators: %d\n" % (
@@ -252,6 +277,8 @@ class Simulation:
                 # e.g. if a passenger is on floor 3, and wants to go to floor 1, only board DOWN elevators
                 for elevator in self.elevators:
                     if elevator.current_floor == floor.id:
+                        boarded_passengers = []
+
                         for passenger in floor.current_passengers:
                             # determine desired direction
                             if passenger.destination > floor.id:
@@ -260,13 +287,6 @@ class Simulation:
                                 desired_direction = Elevator.DOWN
                             else:
                                 raise Exception("Passenger should not be on the floor they wish to exit on!")
-                                # # this passenger is done, let's remove them
-                                # print("Passenger %d is departing (on floor %d, destination %d)" % (
-                                #     passenger.id, elevator.current_floor, passenger.destination
-                                # ))
-                                # elevator.depart(passenger.id)
-                                # self.passengers.remove(passenger)
-                                # continue
 
                             if elevator.has_room() and (
                                     elevator.direction == desired_direction or
@@ -276,13 +296,16 @@ class Simulation:
                                       " desired destination %d, elevator direction %s)" %
                                       (passenger.id, elevator.id, floor.id, passenger.destination,
                                        Elevator.get_direction_string(elevator.direction)))
+                                self.put_sim_event(SimEvent.SimEvents.BOARD, passenger.id)
 
                                 elevator.board(passenger)
                                 if passenger.destination not in self.global_pending_stops:
                                     elevator.add_stop(passenger.destination)
                                     self.global_pending_stops.append(passenger.destination)
                                 # make sure the passenger is not in two places at once
-                                floor.exit(passenger)
+                                boarded_passengers.append(passenger)
+                        # exit after processing all passengers
+                        [floor.exit(x) for x in boarded_passengers]
 
             # elevator is loaded with new passengers from floor
             # now, determine where elevators should go based on:
@@ -297,12 +320,13 @@ class Simulation:
                         print("@@@ Passenger %d is departing (on floor %d, destination %d)" % (
                             passenger.id, elevator.current_floor, passenger.destination
                         ))
+                        self.put_sim_event(SimEvent.SimEvents.DEPART, passenger.id)
                         elevator.depart(passenger)
                         self.passengers.remove(passenger)
 
                         if len(self.passengers) == 0:
                             self.sim_end()
-                            return
+                            return self.sim_events
 
                 if len(elevator.pending_stops) == 0:
                     # reset direction as we can now choose which way to go again
@@ -321,7 +345,7 @@ class Simulation:
 
                     if stop is None:
                         self.sim_end()
-                        return
+                        return self.sim_events
 
                     print("Elevator %d  floor %d is stationary, picking stop %d" % (
                         elevator.id, elevator.current_floor, stop))
@@ -357,6 +381,8 @@ class Simulation:
                     elevator.current_floor = elevator.pending_stops.pop(0)
                     self.global_pending_stops.remove(elevator.current_floor)
                     print("Elevator %d moved to floor %d" % (elevator.id, elevator.current_floor))
+                    self.put_sim_event(SimEvent.SimEvents.ELE_MOVE,
+                                       {"elevator_id": elevator.id, "floor": elevator.current_floor})
 
                     # if now the elevator has reached its final stop, we're stationary again
                     if not len(elevator.pending_stops):
@@ -366,16 +392,24 @@ class Simulation:
             print(self)
             self.sim_step += 1
 
+        return self.sim_events
+
     def sim_end(self):
         print("Simulation finished after %d steps" % self.sim_step)
+
+    def put_sim_event(self, event, data):
+        self.sim_events.append({
+            "step": self.sim_step,
+            "sim_event": SimEvent(event, data)
+        })
 
 # TODO multi elevator bugs:
 # runs finish too early sometimes (see txt file)
 # passengers on same floor are getting split between elevators for some reason, when they could fit in 1
 
 if __name__ == '__main__':
-    for i in range(0, 1):
-        s = Simulation(5, 2, 5, 3)
+    for z in range(0, 1):
+        s = Simulation.random_setup(5, 2, 5, 3)
         print(s)
         s.sim_loop()
-        print("Finished sim run %d" % i)
+        print("Finished sim run %d" % z)
